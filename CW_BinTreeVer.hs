@@ -43,36 +43,29 @@ import Test.QuickCheck
 data Set a = Empty | Node a (Set a) (Set a) deriving (Show, Ord)
 
 height :: Set a -> Int
-height Empty = 0
+height Empty = -1
 height (Node _ l r) = 1 + max(height l) (height r)
 
 balanceValue :: Set a -> Int
 balanceValue Empty = 0
-balanceValue (Node _ Empty Empty) = 0
-balanceValue (Node _ l Empty) = (height l) + 1
-balanceValue (Node _ Empty r) = (height r) + 1
 balanceValue (Node _ l r) = (height l - height r)
  
 -- balance the tree
 balance :: Set a -> Set a
 balance Empty = Empty
 balance (Node x l r)
-  | balanceValue (Node x l r) > 1 =
-      if balanceValue l < 0
-      then rotateLeft (Node x (rotateRight l) r)
-      else rotateRight (Node x l r)
-  | balanceValue (Node x l r) < -1 = 
-      if balanceValue r > 0
-      then rotateRight (Node x l (rotateLeft r))
-      else rotateLeft (Node x l r)
+  | balanceValue (Node x l r) > 1 && balanceValue l >= 0 = rotateRight (Node x l r)
+  | balanceValue (Node x l r) < -1 && balanceValue r <= 0 = rotateLeft (Node x l r)
+  | balanceValue (Node x l r) > 1 && balanceValue l < 0 = rotateRight (Node x (rotateLeft l) r)
+  | balanceValue (Node x l r) < -1 && balanceValue r > 0 = rotateLeft (Node x l (rotateRight r))
   | otherwise = Node x l r
 
 rotateLeft :: Set a -> Set a
-rotateLeft (Node x (Node y l r) z) = Node y l (Node x r z)
+rotateLeft (Node x l (Node y m r)) = Node y (Node x l m) r
 rotateLeft tree = tree
 
 rotateRight :: Set a -> Set a
-rotateRight (Node x z (Node y l r)) = Node y (Node x l z) r
+rotateRight (Node x (Node y l m) r) = Node y l (Node x m r)
 rotateRight tree = tree
 
 numOfElements :: Set a -> Int
@@ -98,7 +91,7 @@ quickSort (x:xs) = quickSort(filter(<x) xs) ++ [x] ++ quickSort(filter(>=x) xs)
 
 -- fromList: do not forget to remove duplicates!
 fromList :: Ord a => [a] -> Set a
-fromList = foldl (flip insertCW) Empty . nub . quickSort
+fromList = foldl (flip Coursework.insert) Empty . nub . quickSort
 
 -- Make sure you satisfy this property. If it fails, then all of the functions
 -- on Part 3 will also fail their tests
@@ -135,16 +128,20 @@ singleton x = Node x Empty Empty
 
 -- insert an element *x* of type *a* into Set *s* make sure there are no
 -- duplicates!
-insertCW :: Ord a => a -> Set a -> Set a
-insertCW x Empty = Node x Empty Empty
-insertCW x (Node y left right)
-  | x == y = Node y left right
-  | x < y = balance(Node y (insertCW x left) right)
-  | x > y = balance(Node y left (insertCW x right))
+insert :: Ord a => a -> Set a -> Set a
+insert x Empty = Node x Empty Empty
+insert x (Node y left right)
+  | x < y = balance(Node y (Coursework.insert x left) right)
+  | x > y = balance(Node y left (Coursework.insert x right))
+  | otherwise = Node y left right -- no change
 
-auxToList :: Set a -> [a] -> [a]
-auxToList Empty acc = acc
-auxToList (Node x left right) acc = auxToList left (x : auxToList right acc)
+auxToList :: Set a -> [a] -- (No Ord (: )
+auxToList Empty = []
+auxToList (Node x left right) = auxToList left ++ [x] ++ auxToList right
+
+auxFromList :: [a] -> Set a -- List should already be sorted
+auxFromList [] = Empty
+auxFromList (x:xs) = Node x (auxFromList (take (length xs `div` 2) xs)) (auxFromList (drop (length xs `div` 2) xs))
 
 -- join two Sets together be careful not to introduce duplicates.
 union :: (Ord a) => Set a -> Set a -> Set a
@@ -158,7 +155,7 @@ intersection s1 s2 = fromList([x | x <- toList s1, x `elem` toList s2])
 -- {1,2,3,4} `difference` {3,4} => {1,2}
 -- {} `difference` {0} => {}
 difference :: (Ord a) => Set a -> Set a -> Set a
-difference s1 s2 = undefined
+difference s1 s2 = fromList([x | x <- toList s1, x `notElem` toList s2])
 
 -- is element *x* in the Set s1?
 member :: (Ord a) => a -> Set a -> Bool
@@ -166,20 +163,20 @@ member x s1 = x `elem` toList s1
 
 -- how many elements are there in the Set?
 cardinality :: Set a -> Int
-cardinality s = numOfElements s
+cardinality = numOfElements
 
 -- apply a function to every element in the Set
 setmap :: (Ord b) => (a -> b) -> Set a -> Set b
-setmap f s = fromList(map f (auxToList s []))
+setmap f s = fromList(map f (auxToList s))
 
 -- right fold a Set using a function *f*
 setfoldr :: (a -> b -> b) -> Set a -> b -> b
-setfoldr f s acc = foldr f acc (auxToList s [])
+setfoldr f s acc = foldr f acc (auxToList s)
 
 -- remove an element *x* from the set
 -- return the set unaltered if *x* is not present
 removeSet :: (Eq a) => a -> Set a -> Set a
-removeSet x s = fromList [d | d <- (toList s), d /= x] 
+removeSet x s = auxFromList [d | d <- auxToList s, d /= x] 
 
 -- powerset of a set
 -- powerset {1,2} => { {}, {1}, {2}, {1,2} }
