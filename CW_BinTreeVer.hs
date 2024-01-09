@@ -2,7 +2,7 @@
 module Coursework where
 
 import Data.List
-import qualified Data.Set as HS (fromList, toList)
+import qualified Data.Set as HS (fromList, toList, union, intersection, difference, empty, singleton, member, null)
 import Test.QuickCheck
 
 {-
@@ -42,6 +42,12 @@ import Test.QuickCheck
 -- cannot be used to represent a set.
 data Set a = Empty | Node a (Set a) (Set a) deriving (Show, Ord)
 
+tree1 :: Set Int
+tree1 = fromList [1..1000]
+
+tree2 :: Set Int
+tree2 = fromList [999..5000]
+
 height :: Set a -> Int
 height Empty = -1
 height (Node _ l r) = 1 + max(height l) (height r)
@@ -59,6 +65,7 @@ balance (Node x l r)
   | balanceValue (Node x l r) > 1 && balanceValue l < 0 = rotateRight (Node x (rotateLeft l) r)
   | balanceValue (Node x l r) < -1 && balanceValue r > 0 = rotateLeft (Node x l (rotateRight r))
   | otherwise = Node x l r
+
 
 rotateLeft :: Set a -> Set a
 rotateLeft (Node x l (Node y m r)) = Node y (Node x l m) r
@@ -91,7 +98,7 @@ quickSort (x:xs) = quickSort(filter(<x) xs) ++ [x] ++ quickSort(filter(>=x) xs)
 
 -- fromList: do not forget to remove duplicates!
 fromList :: Ord a => [a] -> Set a
-fromList = foldl (flip Coursework.insert) Empty . nub . quickSort
+fromList = foldl (flip Coursework.insert) Empty
 
 -- Make sure you satisfy this property. If it fails, then all of the functions
 -- on Part 3 will also fail their tests
@@ -102,7 +109,7 @@ toFromListProp =
 
 -- test if two sets have the same elements (pointwise equivalent).
 instance (Ord a) => Eq (Set a) where
-  s1 == s2 = undefined
+  s1 == s2 = (toList s1) == (toList s2)
 
 -- you should be able to satisfy this property quite easily
 eqProp :: IO ()
@@ -141,25 +148,51 @@ auxToList (Node x left right) = auxToList left ++ [x] ++ auxToList right
 
 auxFromList :: [a] -> Set a -- List should already be sorted
 auxFromList [] = Empty
-auxFromList (x:xs) = Node x (auxFromList (take (length xs `div` 2) xs)) (auxFromList (drop (length xs `div` 2) xs))
+auxFromList (x:xs) = Node x (auxFromList (take (length xs `div` 2) xs)) (auxFromList (drop (length xs `div` 2) xs)) -- take the middle element as the root and then recursively build the tree
 
 -- join two Sets together be careful not to introduce duplicates.
 union :: (Ord a) => Set a -> Set a -> Set a
-union s1 s2 = fromList((toList s1) ++ (toList s2))
+union Empty t2 = t2
+union t1 Empty = t1
+union (Node x l1 r1) t2 =
+  let (lt2, gt2) = split x t2
+  in join x (Coursework.union l1 lt2) (Coursework.union r1 gt2)
 
+split :: Ord a => a -> Set a -> (Set a, Set a)
+split x Empty = (Empty, Empty)
+split x (Node y l r)
+  | x < y     = let (lt, gt) = split x l in (lt, join y gt r)
+  | x > y     = let (lt, gt) = split x r in (join y l lt, gt)
+  | otherwise = (l, r)  -- x == y, so don't include y in either lt or gt
+
+join :: Ord a => a -> Set a -> Set a -> Set a
+join x l r = balance (Node x l r)
+
+unionProp :: IO ()
+unionProp =
+  quickCheck ((\xs ys -> (toList . Coursework.union (fromList xs) . fromList $ ys) == quickSort (nub (xs ++ ys))) :: [Int] -> [Int] -> Bool)
 -- return, as a Set, the common elements between two Sets
 intersection :: (Ord a) => Set a -> Set a -> Set a
-intersection s1 s2 = fromList([x | x <- toList s1, x `elem` toList s2])
+intersection s1 s2 = auxFromList([x | x <- toList s1, x `elem` toList s2])
 
 -- all the elements in *s1* not in *s2*
 -- {1,2,3,4} `difference` {3,4} => {1,2}
 -- {} `difference` {0} => {}
 difference :: (Ord a) => Set a -> Set a -> Set a
-difference s1 s2 = fromList([x | x <- toList s1, x `notElem` toList s2])
+difference s1 s2 = auxFromList([x | x <- toList s1, x `notElem` toList s2])
+
+differenceProp :: IO ()
+differenceProp =
+  quickCheck
+    ((\xs -> HS.toList (HS.difference (HS.fromList xs) (HS.fromList xs)) == []) :: [Int] -> Bool)
 
 -- is element *x* in the Set s1?
 member :: (Ord a) => a -> Set a -> Bool
-member x s1 = x `elem` toList s1 
+member x Empty = False
+member x (Node y left right)
+  | x < y = member x left
+  | x > y = member x right
+  | otherwise = True
 
 -- how many elements are there in the Set?
 cardinality :: Set a -> Int
@@ -176,12 +209,12 @@ setfoldr f s acc = foldr f acc (auxToList s)
 -- remove an element *x* from the set
 -- return the set unaltered if *x* is not present
 removeSet :: (Eq a) => a -> Set a -> Set a
-removeSet x s = auxFromList [d | d <- auxToList s, d /= x] 
+removeSet x s = balance (auxFromList [d | d <- auxToList s, d /= x])
 
 -- powerset of a set
 -- powerset {1,2} => { {}, {1}, {2}, {1,2} }
 powerSet :: Set a -> Set (Set a)
-powerSet s = undefined
+powerSet s = auxFromList(map auxFromList (subsequences (auxToList s)))
 
 {-
    ON MARKING:

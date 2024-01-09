@@ -52,6 +52,12 @@ This can be made into a binary tree to make it more efficient. This would be don
    will fail the coursework!
 -}
 
+tree1 :: Set Int
+tree1 = fromList [1..1000]
+
+tree2 :: Set Int
+tree2 = fromList [999..5000]
+
 -- toList {2,1,4,3} => [1,2,3,4]
 -- the output must be sorted.
 toList :: Ord a => Set a -> [a]
