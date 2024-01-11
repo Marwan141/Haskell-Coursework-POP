@@ -1,7 +1,6 @@
 {- DO NOT CHANGE MODULE NAME, if you do, the file will not load properly -}
 module Coursework where
 
-import Data.List
 import qualified Data.Set as HS (fromList, toList)
 import Test.QuickCheck
 

@@ -2,7 +2,7 @@
 module Coursework where
 
 import Data.List
-import qualified Data.Set as HS (fromList, toList, union, intersection, difference, empty, singleton, member, null)
+import qualified Data.Set as HS (empty, fromList, toList, null, singleton, insert, union, intersection, difference, member, size, map, foldr, delete, fromList, toList, Set )
 import Test.QuickCheck
 
 {-
@@ -42,12 +42,6 @@ import Test.QuickCheck
 -- cannot be used to represent a set.
 data Set a = Empty | Node a (Set a) (Set a) deriving (Show, Ord)
 
-tree1 :: Set Int
-tree1 = fromList [1..1000]
-
-tree2 :: Set Int
-tree2 = fromList [999..5000]
-
 height :: Set a -> Int
 height Empty = -1
 height (Node _ l r) = 1 + max(height l) (height r)
@@ -56,7 +50,7 @@ balanceValue :: Set a -> Int
 balanceValue Empty = 0
 balanceValue (Node _ l r) = (height l - height r)
  
--- balance the tree
+-- balance the tree (this made me die inside)
 balance :: Set a -> Set a
 balance Empty = Empty
 balance (Node x l r)
@@ -75,9 +69,8 @@ rotateRight :: Set a -> Set a
 rotateRight (Node x (Node y l m) r) = Node y l (Node x m r)
 rotateRight tree = tree
 
-numOfElements :: Set a -> Int
-numOfElements Empty = 0
-numOfElements (Node _ l r) = 1 + numOfElements l + numOfElements r
+
+
 
 {-
    PART 2.
@@ -90,15 +83,28 @@ numOfElements (Node _ l r) = 1 + numOfElements l + numOfElements r
 -- the output must be sorted.
 toList :: Ord a => Set a -> [a]
 toList Empty = []
-toList (Node x left right) = toList left ++ [x] ++ toList right
+toList (Node x left right) = quickSort (toList left ++ [x] ++ toList right)
 
 quickSort :: Ord a => [a] -> [a]
 quickSort [] = []
 quickSort (x:xs) = quickSort(filter(<x) xs) ++ [x] ++ quickSort(filter(>=x) xs)
 
+nub :: Ord a => [a] -> [a] -- if u want to test this use Coursework.nub
+nub [] = []
+nub (x:xs) = x : Coursework.nub (filter (/= x) xs)
+
 -- fromList: do not forget to remove duplicates!
 fromList :: Ord a => [a] -> Set a
-fromList = foldl (flip Coursework.insert) Empty
+fromList [] = Empty
+fromList x =
+  balance (Node (xs !! mid) 
+               (fromList (take mid xs)) 
+               (fromList (drop (mid + 1) xs)))
+               where
+                 mid = length xs `div` 2
+                 xs = quickSort (Coursework.nub x)
+
+         
 
 -- Make sure you satisfy this property. If it fails, then all of the functions
 -- on Part 3 will also fail their tests
@@ -126,32 +132,36 @@ empty :: Set a
 empty = Empty
 
 -- is it the empty set?
-null :: Set a -> Bool
+null :: Set a -> Bool -- Write Coursework.null for use
 null s = cardinality s == 0
 
 -- build a one element Set
-singleton :: a -> Set a
+singleton :: a -> Set a -- Write Coursework.singleton for use
 singleton x = Node x Empty Empty
 
 -- insert an element *x* of type *a* into Set *s* make sure there are no
 -- duplicates!
-insert :: Ord a => a -> Set a -> Set a
+insert :: Ord a => a -> Set a -> Set a -- Write Coursework.insert for use
 insert x Empty = Node x Empty Empty
 insert x (Node y left right)
   | x < y = balance(Node y (Coursework.insert x left) right)
   | x > y = balance(Node y left (Coursework.insert x right))
   | otherwise = Node y left right -- no change
 
-auxToList :: Set a -> [a] -- (No Ord (: )
+auxToList :: Set a -> [a] -- (No Ord (: SHOULD ALWAYS BE WSORTED!! )
 auxToList Empty = []
 auxToList (Node x left right) = auxToList left ++ [x] ++ auxToList right
 
 auxFromList :: [a] -> Set a -- List should already be sorted
 auxFromList [] = Empty
-auxFromList (x:xs) = Node x (auxFromList (take (length xs `div` 2) xs)) (auxFromList (drop (length xs `div` 2) xs)) -- take the middle element as the root and then recursively build the tree
+auxFromList xs = let mid = length xs `div` 2
+              in (Node (xs !! mid) 
+               (auxFromList (take mid xs)) 
+               (auxFromList (drop (mid + 1) xs)))  
+         
 
 -- join two Sets together be careful not to introduce duplicates.
-union :: (Ord a) => Set a -> Set a -> Set a
+union :: (Ord a) => Set a -> Set a -> Set a -- Write Coursework.union for use
 union Empty t2 = t2
 union t1 Empty = t1
 union (Node x l1 r1) t2 =
@@ -161,30 +171,31 @@ union (Node x l1 r1) t2 =
 split :: Ord a => a -> Set a -> (Set a, Set a)
 split x Empty = (Empty, Empty)
 split x (Node y l r)
-  | x < y     = let (lt, gt) = split x l in (lt, join y gt r)
-  | x > y     = let (lt, gt) = split x r in (join y l lt, gt)
-  | otherwise = (l, r)  -- x == y, so don't include y in either lt or gt
+  | x < y     = let (lt, gt) = split x l in (lt, join y gt r) -- split left side of the tree
+  | x > y     = let (lt, gt) = split x r in (join y l lt, gt) -- split right side of the tree
+  | otherwise = (l, r)  
 
 join :: Ord a => a -> Set a -> Set a -> Set a
 join x l r = balance (Node x l r)
 
-unionProp :: IO ()
-unionProp =
-  quickCheck ((\xs ys -> (toList . Coursework.union (fromList xs) . fromList $ ys) == quickSort (nub (xs ++ ys))) :: [Int] -> [Int] -> Bool)
 -- return, as a Set, the common elements between two Sets
-intersection :: (Ord a) => Set a -> Set a -> Set a
-intersection s1 s2 = auxFromList([x | x <- toList s1, x `elem` toList s2])
+intersection :: (Ord a) => Set a -> Set a -> Set a 
+intersection Empty t2 = Empty
+intersection t1 Empty = Empty
+intersection (Node x l1 r1) t2 =
+  let (lt2, gt2) = split x t2
+  in if member x t2 then join x (intersection l1 lt2) (intersection r1 gt2) else Empty
+
 
 -- all the elements in *s1* not in *s2*
 -- {1,2,3,4} `difference` {3,4} => {1,2}
 -- {} `difference` {0} => {}
 difference :: (Ord a) => Set a -> Set a -> Set a
-difference s1 s2 = auxFromList([x | x <- toList s1, x `notElem` toList s2])
-
-differenceProp :: IO ()
-differenceProp =
-  quickCheck
-    ((\xs -> HS.toList (HS.difference (HS.fromList xs) (HS.fromList xs)) == []) :: [Int] -> Bool)
+difference Empty t2 = Empty
+difference t1 Empty = t1
+difference (Node x l1 r1) t2 =
+  let (lt2, gt2) = split x t2
+  in if member x t2 then difference (difference l1 lt2) (difference r1 gt2) else join x (difference l1 lt2) (difference r1 gt2)
 
 -- is element *x* in the Set s1?
 member :: (Ord a) => a -> Set a -> Bool
@@ -196,25 +207,28 @@ member x (Node y left right)
 
 -- how many elements are there in the Set?
 cardinality :: Set a -> Int
-cardinality = numOfElements
+cardinality Empty = 0
+cardinality (Node _ l r) = 1 + cardinality l + cardinality r
 
 -- apply a function to every element in the Set
 setmap :: (Ord b) => (a -> b) -> Set a -> Set b
-setmap f s = fromList(map f (auxToList s))
+setmap _ Empty = Empty
+setmap f (Node x left right) = Node (f x) (setmap f left) (setmap f right)
 
 -- right fold a Set using a function *f*
-setfoldr :: (a -> b -> b) -> Set a -> b -> b
+setfoldr :: (a -> b -> b) -> Set a -> b -> b -- what even is foldr for a set
 setfoldr f s acc = foldr f acc (auxToList s)
 
--- remove an element *x* from the set
--- return the set unaltered if *x* is not present
+-- remove an element *x* from the set-- return the set unaltered if *x* is not present
 removeSet :: (Eq a) => a -> Set a -> Set a
 removeSet x s = balance (auxFromList [d | d <- auxToList s, d /= x])
 
 -- powerset of a set
 -- powerset {1,2} => { {}, {1}, {2}, {1,2} }
 powerSet :: Set a -> Set (Set a)
-powerSet s = auxFromList(map auxFromList (subsequences (auxToList s)))
+powerSet s = auxFromList(map auxFromList (subsequences (auxToList s))) 
+
+-- I tried my best pls have mercy
 
 {-
    ON MARKING:
